@@ -1,0 +1,31 @@
+[package]
+name = "pico-w-blinky"
+version = "0.1.0"
+edition = "2021"
+
+# rust-analyzerでno_std特有の警告が出るのを防ぐ
+[[bin]]
+name = "pico-w-blinky"
+path = "src/main.rs"
+test = false
+doctest = false
+bench = false
+
+[dependencies]
+embassy-executor = { version = "0.7.0", features = ["task-arena-size-98304", "arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
+embassy-time = { version = "0.4.0", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-rp = { version = "0.3.0", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp2040"] }
+cyw43 = { version = "0.3.0", features = ["defmt", "firmware-logs"] }
+cyw43-pio = { version = "0.3.0", features = ["defmt"] }
+
+defmt = "0.3"
+defmt-rtt = "0.4"
+
+cortex-m-rt = "0.7.0"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+
+static_cell = "2.1"
+portable-atomic = { version = "1.5", features = ["critical-section"] }
+
+
