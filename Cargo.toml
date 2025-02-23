@@ -1,11 +1,11 @@
 [package]
-name = "pico-w-blinky"
+name = "pico-w-http"
 version = "0.1.0"
 edition = "2021"
 
 # rust-analyzerでno_std特有の警告が出るのを防ぐ
 [[bin]]
-name = "pico-w-blinky"
+name = "pico-w-http"
 path = "src/main.rs"
 test = false
 doctest = false
@@ -29,3 +29,5 @@ static_cell = "2.1"
 portable-atomic = { version = "1.5", features = ["critical-section"] }
 
 
+embassy-usb-logger = { version = "0.4.0" }
+log = "0.4.26"

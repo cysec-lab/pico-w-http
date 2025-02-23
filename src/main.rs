@@ -6,14 +6,18 @@ use defmt::*;
 use embassy_executor::Spawner;
 use embassy_rp::bind_interrupts;
 use embassy_rp::gpio::{Level, Output};
-use embassy_rp::peripherals::{DMA_CH0, PIO0};
+use embassy_rp::peripherals::{DMA_CH0, PIO0, USB};
 use embassy_rp::pio::{InterruptHandler, Pio};
 use embassy_time::{Duration, Timer};
 use static_cell::StaticCell;
+
+use embassy_rp::usb::{Driver, InterruptHandler as usb_InterruptHandler};
+
 use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
+    USBCTRL_IRQ => usb_InterruptHandler<USB>;
 });
 
 #[embassy_executor::task]
@@ -21,10 +25,20 @@ async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'stat
     runner.run().await
 }
 
+#[embassy_executor::task]
+async fn logger_task(driver: Driver<'static, USB>) {
+    embassy_usb_logger::run!(1024, log::LevelFilter::Info, driver);
+}
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     // ペリフェラルを初期化
     let p = embassy_rp::init(Default::default());
+
+    let driver = Driver::new(p.USB, Irqs);
+
+    spawner.spawn(logger_task(driver)).unwrap();
+    let mut counter = 0;
 
     // WiFi ファームウェアとCLMを読み込む
     let fw = include_bytes!("../firmware/43439A0.bin");
@@ -65,6 +79,8 @@ async fn main(spawner: Spawner) {
 
     // メインループ
     loop {
+        counter += 1;
+        log::info!("Hello, World! {}", counter);
         control.gpio_set(0, true).await;
         Timer::after(delay).await;
 
