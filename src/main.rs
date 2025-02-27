@@ -17,7 +17,7 @@ use embassy_rp::usb::{Driver, InterruptHandler as usb_InterruptHandler};
 
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
-use embassy_net::{Config, StackResources};
+use embassy_net::{tcp, Config, StackResources};
 use embassy_rp::clocks::RoscRng;
 use rand::RngCore;
 use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
@@ -116,12 +116,12 @@ async fn main(spawner: Spawner) {
         }
     }
 
-    log::info!("waiting for HDCP ...");
+    log::info!("waiting for DHCP ...");
     while !stack.is_config_up() {
         Timer::after_millis(100).await;
     }
 
-    log::info!("HDCP is up!");
+    log::info!("DHCP is up!");
 
     log::info!("waiting for link up ...");
     while !stack.is_link_up() {
@@ -134,5 +134,49 @@ async fn main(spawner: Spawner) {
     stack.wait_config_up().await;
     log::info!("stack is up!");
 
+    loop {
+        let mut rx_buffer = [0; 8192];
+        
+        let client_state = TcpClientState::<1, 1024, 1024>::new();
+        let tcp_client = TcpClient::new(stack, &client_state);
+        let dns_client = DnsSocket::new(stack);
 
+        let mut http_client = HttpClient::new(&tcp_client, &dns_client);
+
+        let url = "http://example.com";
+
+        log::info!("connecting to {}", url);
+
+        let mut request = match http_client.request(Method::GET, &url).await {
+            Ok(req) => req,
+            Err(e) => {
+                log::error!("Failed to make HTTP request: {:?}", e);
+                return;
+            }
+        };
+
+        log::info!("sending request ...");
+
+        let response = match request.send(&mut rx_buffer).await {
+            Ok(resp) => resp,
+            Err(_e) => {
+                log::error!("Failed to send HTTP request");
+                return;
+            }
+        };
+
+        log::info!("response status: {:?}", response.status);
+
+        let body = match from_utf8(response.body().read_to_end().await.unwrap()) {
+            Ok(b) => b,
+            Err(_e) => {
+                log::error!("Failed to read response body");
+                return;
+            }
+        };
+        
+        log::info!("response body: {}", body);
+
+        Timer::after(Duration::from_secs(10)).await;
+    }
 }
