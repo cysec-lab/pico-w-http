@@ -31,3 +31,12 @@ portable-atomic = { version = "1.5", features = ["critical-section"] }
 
 embassy-usb-logger = { version = "0.4.0" }
 log = "0.4.26"
+
+serde = { version = "1.0.203", default-features = false, features = ["derive"] }
+rand_core = "0.6.4"
+embassy-net = { version = "0.6.0", features = ["defmt", "tcp", "udp", "raw", "dhcpv4", "medium-ethernet", "dns", "proto-ipv4", "proto-ipv6", "multicast"] }
+reqwless = "0.13.0"
+rand = { version = "0.8.5", default-features = false }
+serde-json-core = "0.6.0"
+
+

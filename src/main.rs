@@ -1,6 +1,8 @@
 #![no_std]
 #![no_main]
+use core::str::from_utf8;
 
+use cyw43::JoinOptions;
 use cyw43_pio::{PioSpi, DEFAULT_CLOCK_DIVIDER};
 use defmt::*;
 use embassy_executor::Spawner;
@@ -13,7 +15,19 @@ use static_cell::StaticCell;
 
 use embassy_rp::usb::{Driver, InterruptHandler as usb_InterruptHandler};
 
-use {defmt_rtt as _, panic_probe as _};
+use embassy_net::dns::DnsSocket;
+use embassy_net::tcp::client::{TcpClient, TcpClientState};
+use embassy_net::{Config, StackResources};
+use embassy_rp::clocks::RoscRng;
+use rand::RngCore;
+use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
+use reqwless::request::Method;
+use serde::Deserialize;
+
+use {defmt_rtt as _, panic_probe as _, serde_json_core};
+
+const WIFI_SSID: &str = "SSID";
+const WIFI_PASSWORD: &str = "PASSWORD";
 
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -22,6 +36,11 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::task]
 async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>) -> ! {
+    runner.run().await
+}
+
+#[embassy_executor::task]
+async fn net_task(mut runner: embassy_net::Runner<'static, cyw43::NetDriver<'static>>) -> ! {
     runner.run().await
 }
 
@@ -36,6 +55,8 @@ async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
     let driver = Driver::new(p.USB, Irqs);
+
+    let mut rng = RoscRng;
 
     spawner.spawn(logger_task(driver)).unwrap();
     let mut counter = 0;
@@ -65,7 +86,7 @@ async fn main(spawner: Spawner) {
     // WiFiチップの初期化
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
-    let (_net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
+    let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
     // WiFiチップのタスクを起動
     unwrap!(spawner.spawn(cyw43_task(runner)));
 
@@ -77,14 +98,41 @@ async fn main(spawner: Spawner) {
 
     let delay = Duration::from_secs(1);
 
-    // メインループ
-    loop {
-        counter += 1;
-        log::info!("Hello, World! {}", counter);
-        control.gpio_set(0, true).await;
-        Timer::after(delay).await;
+    let config = Config::dhcpv4(Default::default());
 
-        control.gpio_set(0, false).await;
-        Timer::after(delay).await;
+    let seed = rng.next_u64();
+    
+    static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
+    let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
+
+    unwrap!(spawner.spawn(net_task(runner)));
+
+    loop {
+        match control.join(WIFI_SSID, JoinOptions::new(WIFI_PASSWORD.as_bytes())).await {
+            Ok(_) => break,
+            Err(err) => {
+                log::info!("join failed with status={}", err.status);
+            }
+        }
     }
+
+    log::info!("waiting for HDCP ...");
+    while !stack.is_config_up() {
+        Timer::after_millis(100).await;
+    }
+
+    log::info!("HDCP is up!");
+
+    log::info!("waiting for link up ...");
+    while !stack.is_link_up() {
+        Timer::after_millis(500).await;
+    }
+
+    log::info!("link is up!");
+
+    log::info!("waiting for stack to be up ...");
+    stack.wait_config_up().await;
+    log::info!("stack is up!");
+
+
 }
