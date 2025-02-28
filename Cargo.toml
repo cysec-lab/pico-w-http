@@ -11,6 +11,7 @@ test = false
 doctest = false
 bench = false
 
+# cargo run --release 時の設定
 [profile.release]
 opt-level = "s"
 debug = false
