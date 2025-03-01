@@ -25,7 +25,7 @@ use cyw43::JoinOptions;
 use cyw43_pio::{PioSpi, DEFAULT_CLOCK_DIVIDER};
 
 // 組み込み向けHTTPクライアント
-use reqwless::client::HttpClient;
+use reqwless::client::{HttpClient, TlsConfig, TlsVerify};
 use reqwless::request::Method;
 
 // logger
@@ -33,10 +33,10 @@ use panic_halt as _;
 
 // WiFiのSSIDとパスワード
 const WIFI_SSID: &str = "SSID";
-const WIFI_PASSWORD: &str = "PASSWORD";
+const WIFI_PASSWORD: &str = "PASS";
 
 // 接続先URL（HTTP限定）
-const TEST_URL: &str = "http://example.com";
+const TEST_URL: &str = "https://httpbin.org/ip";
 
 // 割り込みと割り込みハンドラを対応付け
 bind_interrupts!(struct Irqs {
@@ -149,12 +149,15 @@ async fn main(spawner: Spawner) {
 
     loop {
         let mut rx_buffer = [0; 8192];
+        let mut tls_read_buffer = [0; 16640];
+        let mut tls_write_buffer = [0; 16640];
         
         let client_state = TcpClientState::<1, 1024, 1024>::new();
         let tcp_client = TcpClient::new(stack, &client_state);
         let dns_client = DnsSocket::new(stack);
+        let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
 
-        let mut http_client = HttpClient::new(&tcp_client, &dns_client);
+        let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns_client, tls_config);
 
         log::info!("connecting to {}", TEST_URL);
 
