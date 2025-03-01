@@ -29,8 +29,7 @@ use reqwless::client::HttpClient;
 use reqwless::request::Method;
 
 // logger
-use defmt::*;
-use {defmt_rtt as _, panic_probe as _};
+use panic_halt as _;
 
 // WiFiのSSIDとパスワード
 const WIFI_SSID: &str = "SSID";
@@ -103,7 +102,7 @@ async fn main(spawner: Spawner) {
     let state = STATE.init(cyw43::State::new());
     let (net_device, mut control, runner) = cyw43::new(state, pwr, spi, fw).await;
     // WiFiチップのタスクを起動
-    unwrap!(spawner.spawn(cyw43_task(runner)));
+    spawner.spawn(cyw43_task(runner)).unwrap();
 
     // WiFiチップの初期化
     control.init(clm).await;
@@ -116,8 +115,9 @@ async fn main(spawner: Spawner) {
     static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
     let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
     // ネットワークスタックのタスクを起動
-    unwrap!(spawner.spawn(net_task(runner)));
+    spawner.spawn(net_task(runner)).unwrap();
 
+    log::info!("Connecting to WiFi ... !!");
     // WiFiに接続
     loop {
         // 接続に成功するまで繰り返す
@@ -186,7 +186,7 @@ async fn main(spawner: Spawner) {
             }
         };
         
-        log::info!("response body: {}", body);
+        log::info!("response body: {:?}", &body);
 
         Timer::after(Duration::from_secs(10)).await;
     }
