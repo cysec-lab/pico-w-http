@@ -17,7 +17,7 @@ opt-level = "s"
 debug = false
 
 [dependencies]
-embassy-executor = { version = "0.7.0", features = ["defmt", "arch-cortex-m", "executor-thread"] }
+embassy-executor = { version = "0.7.0", features = ["defmt", "arch-cortex-m", "executor-thread", "task-arena-size-98304"] }
 embassy-rp = { version = "0.3.0", features = ["time-driver", "critical-section-impl", "rp2040"] }
 embassy-net = { version = "0.6.0", features = ["tcp", "dhcpv4", "dns", "proto-ipv4"] }
 embassy-time = "0.4.0"
