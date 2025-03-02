@@ -71,9 +71,6 @@ async fn main(spawner: Spawner) {
     // USBドライバを初期化, USBでログを出力するタスクの起動
     let driver = Driver::new(p.USB, Irqs);
     spawner.spawn(logger_task(driver)).unwrap();
-    
-    // 乱数生成器を初期化
-    let mut rng = RoscRng;
 
     // WiFi ファームウェアとCLMを読み込む
     let fw = include_bytes!("../firmware/43439A0.bin");
@@ -108,19 +105,22 @@ async fn main(spawner: Spawner) {
     control.init(clm).await;
     control.set_power_management(cyw43::PowerManagementMode::PowerSave).await;
 
-
+    // DHCPv4の設定
     let config = Config::dhcpv4(Default::default());
+
+    // 乱数生成器を初期化
+    let mut rng = RoscRng;
     let seed = rng.next_u64();
     
     static RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
     let (stack, runner) = embassy_net::new(net_device, config, RESOURCES.init(StackResources::new()), seed);
+    
     // ネットワークスタックのタスクを起動
     spawner.spawn(net_task(runner)).unwrap();
 
-    log::info!("Connecting to WiFi ... !!");
+    log::info!("Connecting to WiFi ...");
     // WiFiに接続
     loop {
-        // 接続に成功するまで繰り返す
         match control.join(WIFI_SSID, JoinOptions::new(WIFI_PASSWORD.as_bytes())).await {
             Ok(_) => break,
             Err(err) => {
@@ -129,38 +129,47 @@ async fn main(spawner: Spawner) {
         }
     }
 
+    // DHCPの完了を待つ
     log::info!("waiting for DHCP ...");
     while !stack.is_config_up() {
         Timer::after_millis(100).await;
     }
-
     log::info!("DHCP is up!");
 
+    // リンクアップの完了を待つ
     log::info!("waiting for link up ...");
     while !stack.is_link_up() {
         Timer::after_millis(500).await;
     }
-
     log::info!("link is up!");
 
+    // ネットワークスタックの設定が完了するまで待つ
     log::info!("waiting for stack to be up ...");
     stack.wait_config_up().await;
     log::info!("stack is up!");
 
+
+    // HTTPクライアント
     loop {
+        // HTTPレスポンスのバッファ
         let mut rx_buffer = [0; 8192];
+        // TLSのバッファ
         let mut tls_read_buffer = [0; 16640];
         let mut tls_write_buffer = [0; 16640];
         
+
         let client_state = TcpClientState::<1, 1024, 1024>::new();
+        // TCPクライアントとDNSクライアントを生成
         let tcp_client = TcpClient::new(stack, &client_state);
         let dns_client = DnsSocket::new(stack);
+        // TLS設定(HTPPSの場合)
         let tls_config = TlsConfig::new(seed, &mut tls_read_buffer, &mut tls_write_buffer, TlsVerify::None);
 
+        // httpsならnew_with_tls, httpならnew
         let mut http_client = HttpClient::new_with_tls(&tcp_client, &dns_client, tls_config);
 
         log::info!("connecting to {}", TEST_URL);
-
+        // HTTPリクエストを作製
         let mut request = match http_client.request(Method::GET, &TEST_URL).await {
             Ok(req) => req,
             Err(e) => {
@@ -170,7 +179,7 @@ async fn main(spawner: Spawner) {
         };
 
         log::info!("sending request ...");
-
+        // HTTPリクエストを送信
         let response = match request.send(&mut rx_buffer).await {
             Ok(resp) => resp,
             Err(_e) => {
@@ -179,8 +188,10 @@ async fn main(spawner: Spawner) {
             }
         };
 
+        // ステータスコードの表示
         log::info!("response status: {:?}", response.status);
 
+        // レスポンスボディの表示
         let body = match from_utf8(response.body().read_to_end().await.unwrap()) {
             Ok(b) => b,
             Err(_e) => {
@@ -188,9 +199,9 @@ async fn main(spawner: Spawner) {
                 return;
             }
         };
-        
         log::info!("response body: {:?}", &body);
 
+        // 10秒毎に繰り返す
         Timer::after(Duration::from_secs(10)).await;
     }
 }
