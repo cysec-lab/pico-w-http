@@ -35,8 +35,8 @@ use panic_halt as _;
 const WIFI_SSID: &str = "SSID";
 const WIFI_PASSWORD: &str = "PASS";
 
-// 接続先URL（HTTP限定）
-const TEST_URL: &str = "https://httpbin.org/ip";
+// 接続先URL(HTTP/HTTPS)
+const TEST_URL: &str = "https://example.com";
 
 // 割り込みと割り込みハンドラを対応付け
 bind_interrupts!(struct Irqs {
