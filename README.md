@@ -6,7 +6,7 @@ embassyの[example](https://github.com/embassy-rs/embassy/blob/main/examples/rp/
 ## 環境構築
 * 必要なツールをCargoでインストール
 ```sh
-cargo install elf2rf2-rs flip-link
+cargo install elf2uf2-rs flip-link
 ```
 
 ## 実行方法
